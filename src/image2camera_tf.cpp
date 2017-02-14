@@ -31,6 +31,9 @@ ________________________________________________________________________________
 #include <ros/package.h>
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
+#include <camera_localizer/yaml2calib.h>
+#include <vision_utils/string_split.h>
+#include <vision_utils/print_point.h>
 
 geometry_msgs::TransformStamped transform;
 std::vector<cv::Point2f> pixels;
@@ -44,15 +47,26 @@ bool calib_from_cam_and_exit(const std::string & configfile) {
   ros::NodeHandle nh_public, nh_private("~");
   double cell_width = 1;
   nh_private.param("cell_width", cell_width, cell_width);
+  std::string worldxyz_str;
+  std::vector<double> worldxyz;
+  nh_private.param("worldxyz", worldxyz_str, worldxyz_str);
+  vision_utils::StringSplit_<double>(worldxyz_str,",",&worldxyz);
+  if (worldxyz.size() % 3 != 0) {
+    ROS_FATAL("You must indicate triplets of coordinates, we got %li coordinates",
+              worldxyz.size());
+    return false;
+  }
   std::vector<cv::Point3f> world_pos;
-  world_pos.push_back(cv::Point3f(0, 0, 0));
-  world_pos.push_back(cv::Point3f(0, cell_width, 0));
-  world_pos.push_back(cv::Point3f(cell_width, 0, 0));
-  world_pos.push_back(cv::Point3f(cell_width, cell_width, 0));
-//  pixels.push_back(cv::Point2f(120, 52));
-//  pixels.push_back(cv::Point2f(440, 49));
-//  pixels.push_back(cv::Point2f(50, 343));
-//  pixels.push_back(cv::Point2f(485, 343));
+  unsigned int npts = worldxyz.size() / 3;
+  if (npts < 4) {
+    ROS_FATAL("You must specify at least 4 pts, we got %i", npts);
+    return false;
+  }
+  for (unsigned int i = 0; i < npts; ++i) {
+    cv::Point3f newpt(worldxyz[3*i], worldxyz[3*i+1], worldxyz[3*i+2]);
+    world_pos.push_back(newpt);
+    ROS_INFO("Adding %s", vision_utils::print_point(newpt).c_str());
+  } // end for i
 
   // acquire the four corners
   cv::VideoCapture cap(1); // open the default camera
@@ -73,19 +87,23 @@ bool calib_from_cam_and_exit(const std::string & configfile) {
     cv::putText(viz, caption.str(), cv::Point(20, 20), CV_FONT_HERSHEY_PLAIN,
                 1, CV_RGB(0, 255, 0));
     cv::imshow(winname, viz);
-    cv::waitKey(50);
+    char c = cv::waitKey(50);
+    if (c == 27)
+      return false;
   }
 
   // compute extrinsics with solvePnP()
+  std::string cal_filename = ros::package::getPath("rossumo") + "/data/camcalib.yaml";
+  sensor_msgs::CameraInfo cam_info;
+  image_geometry::PinholeCameraModel cam_model;
+  cv::Mat intrinsics, distortion;
+  if (!yaml2calib(cal_filename, cam_info, cam_model, intrinsics, distortion)) {
+    return -1;
+  }
+
+  // solvePnP works with undistorted coordinates
+  // source: http://stackoverflow.com/questions/34550499/undistort-image-before-estimating-pose-using-solvepnp
   cv::Mat rvec, tvec;
-  cv::Mat1f intrinsics, distortion;
-  intrinsics.create(3, 3);
-  distortion.create(5, 1); // rows, cols
-  intrinsics << 682.1725881370586, 0.0, 312.5467659964813,
-      0.0, 680.0197715304892, 223.89019257733764,
-      0.0, 0.0, 1.0;
-  distortion << 0.04097535332007498, -0.32693493881448615,
-      -8.875602469559667e-05, -0.0022655060973716824, 0.0;
   if (!cv::solvePnP(world_pos, pixels, intrinsics, distortion, rvec, tvec)) {
     ROS_FATAL("cv::solvePnP() failed!");
     return false;
@@ -190,7 +208,7 @@ bool load_from_file(const std::string & configfile) {
 ////////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char** argv) {
-  ros::init(argc, argv, "image_localizer");
+  ros::init(argc, argv, "image2camera_tf");
   std::string configfile = ros::package::getPath("rossumo") + "/config/camera2world_param.txt";
   ros::NodeHandle nh_private("~");
   bool reset = true;

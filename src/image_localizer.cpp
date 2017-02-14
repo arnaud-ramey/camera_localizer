@@ -31,8 +31,7 @@ ________________________________________________________________________________
 // ROS
 #include <ros/node_handle.h>
 #include <ros/package.h>
-#include <camera_calibration_parsers/parse.h>
-#include <image_geometry/pinhole_camera_model.h>
+#include <camera_localizer/yaml2calib.h>
 
 void set_v4l_param(int fd, unsigned int id, int value, const std::string & descr) {
   v4l2_control c;
@@ -54,42 +53,24 @@ int main(int argc, char** argv) {
 
   // get params
   bool display = true;
+  double learningRate = 0;
   nh_private.param("display", display, display);
+  nh_private.param("learningRate", learningRate, learningRate);
 
   // read calibration data
-  std::string cal_filename = ros::package::getPath("rossumo") + "/data/camcalib.yaml",
-      cal_camname = "/camera";
-  sensor_msgs::CameraInfo caminfo;
-  cv::Mat mapx, mapy, intrinsics, distortion;
-  //~ bool ok = camera_calibration_parsers::readCalibration
-      //~ (cal_filename, cal_camname, caminfo);
-  bool ok = false;
-  if (!ok) {
-    ROS_FATAL("Could not read camera '%s' in camera_calibration file '%s'",
-              cal_camname.c_str(), cal_filename.c_str());
-    return -1;
-  }
+  std::string cal_filename = ros::package::getPath("rossumo") + "/data/camcalib.yaml";
+  sensor_msgs::CameraInfo cam_info;
   image_geometry::PinholeCameraModel cam_model;
-  if (!cam_model.fromCameraInfo(caminfo)) {
-    ROS_FATAL("Could not convert CameraInf --> PinholeCameraModel");
+  cv::Mat mapx, mapy, intrinsics, distortion;
+  if (!yaml2calib(cal_filename, cam_info, cam_model, intrinsics, distortion)) {
     return -1;
   }
-  // Read camera parameters from CamerInfo
-  //  printf("K:%i, D:%i\n", caminfo.K.size(), caminfo.D.size());
-  //  std::cout << "intrinsics:" << intrinsics << std::endl;
-  //  std::cout << "distortion:" << distortion << std::endl;
-  intrinsics.create(3, 3, CV_32FC1);
-  for (int row = 0; row < 3; ++row)
-    for (int col = 0; col < 3; ++col)
-      intrinsics.at<float>(row, col) = caminfo.K[3*row+col];
-  distortion.create(5, 1, CV_32FC1); // rows, cols
-  for (int col = 0; col < 5; ++col)
-    distortion.at<float>(col, 0) = caminfo.D[col];
+
   // Computes the undistortion and rectification transformation map.
   // cf http://docs.opencv.org/trunk/modules/imgproc/doc/geometric_transformations.html#initundistortrectifymap
   cv::Mat newCameraMatrix;
   cv::initUndistortRectifyMap(intrinsics, distortion, cv::Mat(), newCameraMatrix,
-                              cv::Size(caminfo.width, caminfo.height), CV_32FC1,
+                              cv::Size(cam_info.width, cam_info.height), CV_32FC1,
                               mapx, mapy);
 
   // http://docs.opencv.org/master/d1/dc5/tutorial_background_subtraction.html#gsc.tab=0
@@ -136,7 +117,7 @@ int main(int argc, char** argv) {
   // open camera with OpenCV
   cv::VideoCapture cap(1); // open the default camera
   //int w = 1280, h = 720;
-  int w = caminfo.width, h = caminfo.height;
+  int w = cam_info.width, h = cam_info.height;
   printf("w:%i, h:%i\n", w, h);
   assert(cap.isOpened());  // check if we succeeded
   cap.set(CV_CAP_PROP_FRAME_WIDTH, w);
@@ -162,7 +143,7 @@ int main(int argc, char** argv) {
     cv::remap(frame, frame_rect, mapx, mapy, cv::INTER_LINEAR);
 
     // find object by differenciation - do not update model
-    bgsub->apply(frame_rect, fg, 0);
+    bgsub->apply(frame_rect, fg, learningRate);
     cv::threshold(fg, fg_thres, 250, 255, CV_THRESH_BINARY);
 
     // find biggest blob

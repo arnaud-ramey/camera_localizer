@@ -17,11 +17,16 @@ find_package(OpenCV REQUIRED)
 ## Generate added messages and services with any dependencies listed here
 ### 6 - Specify package build info export (catkin_package())
 catkin_package(
-  INCLUDE_DIRS    include  src
+  INCLUDE_DIRS    src include
   CATKIN_DEPENDS  ${LIBS}
 )
 ### 7 - Libraries/Executables to build (add_library()/add_executable()/target_link_libraries())
-include_directories(include  src  ${catkin_INCLUDE_DIRS})
+# get vision_utils includes from SVN
+execute_process( # https://cmake.org/cmake/help/v3.0/command/execute_process.html
+  COMMAND bash svn_vision_utils.bash
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+include_directories(src  include  ${catkin_INCLUDE_DIRS})
 ADD_SUBDIRECTORY(src)
 ### 8 - Tests to build (catkin_add_gtest())
 #~ ADD_SUBDIRECTORY(test)

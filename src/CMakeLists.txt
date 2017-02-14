@@ -1,4 +1,7 @@
-add_executable(camera2world_converter.exe camera2world_converter.cpp )
+set(INC_DIR ${PROJECT_SOURCE_DIR}/include/camera_localizer)
+
+add_executable(camera2world_converter.exe camera2world_converter.cpp
+  ${INC_DIR}/yaml2calib.h)
 target_link_libraries(camera2world_converter.exe ${catkin_LIBRARIES})
 
 add_executable(image_localizer.exe image_localizer.cpp )

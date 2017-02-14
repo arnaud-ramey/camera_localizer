@@ -87,7 +87,7 @@ void pt_cb(const geometry_msgs::PointStamped & robot_direction0) {
 ////////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char** argv) {
-  ros::init(argc, argv, "image_localizer");
+  ros::init(argc, argv, "camera2world_converter");
   ros::NodeHandle nh_public, nh_private("~");
   nh_private.param("goalz", goalz, goalz);
   ros::Subscriber dirsub = nh_public.subscribe("robot_direction", 1, pt_cb);
