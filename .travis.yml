@@ -8,6 +8,8 @@ compiler:
   - gcc
 
 before_install:
+  # install required packages from Ubuntu packages
+  - sudo apt-get install -y  libv4l-dev
   # install ROS according to http://wiki.ros.org/indigo/Installation/Ubuntu
   - export ROS_DISTRO=indigo
   - sudo sh -c 'echo "deb http://packages.ros.org/ros/ubuntu trusty main" > /etc/apt/sources.list.d/ros-latest.list'
