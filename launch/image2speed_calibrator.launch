@@ -1,0 +1,60 @@
+<launch>
+<arg name="tf_reset" default="false" />
+<arg name="robot" default="rosmip1" />
+<arg name="device" default="/dev/input/js1" />
+<!-- MIP driver -->
+<!--
+<include unless="$(arg tf_reset)" file="$(find rosmip)/launch/rosmip.launch">
+  <arg name="robot" value="$(arg robot)" />
+  <arg name="output" value="log" />
+</include>
+-->
+<!-- MIP joypad teleoperation -->
+<!--
+<include unless="$(arg tf_reset)" file="$(find rosmip)/launch/joy_teleop.launch">
+  <arg name="robot" value="$(arg robot)" />
+  <arg name="device" value="$(arg device)" />
+</include>
+-->
+<!-- lower speed of joypad teleoperation -->
+<param name="/$(arg robot)/scale_linear" value=".5" />
+
+<group ns="$(arg robot)">
+  <!-- image2camera_tf -->
+  <node pkg="camera_localizer" type="image2camera_tf.exe" name="image2camera_tf" required="true"
+        output="screen" args="_reset:=$(arg tf_reset)">
+    <!-- kitchen: tiled floor corners -->
+<!--
+    <param name="worldxyz" value="0,0,0, 1.36,0,0, 0,1.36,0, 1.36,1.36,0" />
+-->
+    <!-- bedroom: bed-wall corner, bed corner, door-wall limit, marker -->
+    <param name="worldxyz" value="0,0,0, 1.40,0,0, 0,1.70,0, 1,1,0" />
+  </node>
+
+  <!-- image_localizer -->
+  <node unless="$(arg tf_reset)" pkg="camera_localizer" type="image_localizer.exe" name="image_localizer"
+        output="screen" args="_display:=true" required="true">
+    <!-- learningRate The value between 0 and 1 that indicates how fast the
+    background model is learnt. Negative parameter value makes the algorithm to
+    use some automatically chosen learning rate. 0 means that the background
+    model is not updated at all, 1 means that the background model is
+    completely reinitialized from the last frame. -->
+    <param name="learningRate" value="0.001" />
+  </node>
+
+  <!-- camera2world_converter -->
+  <node unless="$(arg tf_reset)" pkg="camera_localizer" type="camera2world_converter.exe" name="camera2world_converter"
+        output="screen" args="_goalz:=.05" required="true">
+  </node>
+
+  <!-- TF: odom -> world -->
+  <node unless="$(arg tf_reset)" pkg="tf" type="static_transform_publisher" name="odom2world_broadcaster" output="screen"
+      args="0 0 0  0 0 0  /world  /odom 100" />
+
+
+  <!-- rviz -->
+  <node unless="$(arg tf_reset)" pkg="rviz" type="rviz" name="rviz" output="screen"
+      args="-display-config $(find camera_localizer)/config/rviz_image_localizer.rviz" />
+
+</group>
+</launch>
