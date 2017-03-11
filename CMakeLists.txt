@@ -7,7 +7,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra") # add extra warnings
 ### 3 - Find other CMake/Catkin packages needed for build
 set(LIBS roscpp roslib
         camera_calibration_parsers  cv_bridge  image_geometry  image_transport
-        std_msgs  tf)
+        std_msgs  tf  vision_utils)
 find_package(catkin REQUIRED COMPONENTS ${LIBS})
 # other libs
 find_package(OpenCV REQUIRED)
@@ -21,11 +21,6 @@ catkin_package(
   CATKIN_DEPENDS  ${LIBS}
 )
 ### 7 - Libraries/Executables to build (add_library()/add_executable()/target_link_libraries())
-# get vision_utils includes from SVN
-execute_process( # https://cmake.org/cmake/help/v3.0/command/execute_process.html
-  COMMAND bash svn_vision_utils.bash
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
 include_directories(src  include  ${catkin_INCLUDE_DIRS})
 ADD_SUBDIRECTORY(src)
 ### 8 - Tests to build (catkin_add_gtest())

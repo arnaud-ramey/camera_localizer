@@ -18,6 +18,8 @@
   <depend>roslib</depend>
   <depend>std_msgs</depend>
   <depend>tf</depend>
+  <!-- Arnaud -->
+  <depend>vision_utils</depend>
   <export>
         <rosdoc config="rosdoc.yaml" /> <!-- http://wiki.ros.org/rosdoc_lite -->
       <cpp cflags="-I${prefix} -I${prefix}/build"

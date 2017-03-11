@@ -57,8 +57,23 @@ You first need to install the official SDK (ARDrone3) by Parrot.
 A summary of the instructions comes below.
 
 
-Dependencies
-------------
+How to install
+==============
+
+## 1. Dependencies from sources
+
+Dependencies handling is based on the [wstool](http://wiki.ros.org/wstool) tool.
+Run the following instructions:
+
+```bash
+$ sudo apt-get install python-wstool
+$ roscd ; cd src
+$ wstool init
+$ wstool merge `rospack find camera_localizer`/dependencies.rosinstall
+$ wstool update
+```
+
+## 2. Dependencies included in the Ubuntu packages
 
 ```bash
 Ubuntu 14.04:
@@ -67,7 +82,7 @@ Ubuntu 16.04:
 $ sudo apt install repo  autoconf  libavahi-client-dev  libavcodec-dev  libavformat-dev  libswscale-dev
 ```
 
-Build camera_localizer with Catkin
+Build package with Catkin
 -------------------------
 
 ```bash
