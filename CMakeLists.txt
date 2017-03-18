@@ -9,6 +9,7 @@ set(DEPS roscpp roslib
         camera_calibration_parsers  cv_bridge  image_geometry  image_transport
         std_msgs  tf  vision_utils)
 find_package(catkin REQUIRED COMPONENTS ${DEPS})
+find_package(OpenCV REQUIRED)
 ### 4 - Message/Service/Action Generators (add_message_files(), add_service_files(), add_action_files())
 # nothing to do
 ### 5 - Invoke message/service/action generation (generate_messages())
