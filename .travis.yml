@@ -26,12 +26,11 @@ before_install:
 before_script: #  Use this to prepare your build for testing e.g. copy database configurations, environment variables, etc.
   # install OpenCV from sources - cf. https://github.com/emchristiansen/Billy/blob/master/.travis.yml
   - git clone https://github.com/Itseez/opencv.git
-  - cd opencv
-  - mkdir build
-  - cd build
+  - mkdir opencv/build
+  - cd opencv/build
   - cmake ..
-  - make -j4
   - sudo make -j4 install
+  - cd ../../
   # Create catkin workspace
   - export CI_SOURCE_PATH=$(pwd)
   - mkdir -p ~/catkin_ws/src
