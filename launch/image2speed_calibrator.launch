@@ -1,60 +1,85 @@
 <launch>
-<arg name="tf_reset" default="false" />
-<arg name="robot" default="rosmip1" />
-<arg name="device" default="/dev/input/js1" />
+<arg name="tf_reset"        default="false" />
+<arg name="device"          default="/dev/input/js1" />
+<arg name="display"         default="true" />
+<arg name="camera_index"    default="0"/>
+<arg name="calib_filename"  default="$(find camera_localizer)/data/Yoga_510_calib.yaml"/>
+<!--
+<arg name="calib_filename"  default="$(find camera_localizer)/data/hp_hd_3310_calib.yaml"/>
+-->
+
 <!-- MIP driver -->
 <!--
 <include unless="$(arg tf_reset)" file="$(find rosmip)/launch/rosmip.launch">
-  <arg name="robot" value="$(arg robot)" />
-  <arg name="output" value="log" />
+<arg name="robot" value="$(arg robot)" />
+<arg name="output" value="log" />
 </include>
 -->
 <!-- MIP joypad teleoperation -->
 <!--
 <include unless="$(arg tf_reset)" file="$(find rosmip)/launch/joy_teleop.launch">
-  <arg name="robot" value="$(arg robot)" />
-  <arg name="device" value="$(arg device)" />
+<arg name="robot" value="$(arg robot)" />
+<arg name="device" value="$(arg device)" />
 </include>
 -->
 <!-- lower speed of joypad teleoperation -->
-<param name="/$(arg robot)/scale_linear" value=".5" />
-
-<group ns="$(arg robot)">
-  <!-- image2camera_tf -->
-  <node pkg="camera_localizer" type="image2camera_tf.exe" name="image2camera_tf" required="true"
-        output="screen" args="_reset:=$(arg tf_reset)">
-    <!-- kitchen: tiled floor corners -->
 <!--
-    <param name="worldxyz" value="0,0,0, 1.36,0,0, 0,1.36,0, 1.36,1.36,0" />
+<param name="/$(arg robot)/scale_linear" value=".5" />
 -->
-    <!-- bedroom: bed-wall corner, bed corner, door-wall limit, marker -->
-    <param name="worldxyz" value="0,0,0, 1.40,0,0, 0,1.70,0, 1,1,0" />
-  </node>
 
-  <!-- image_localizer -->
-  <node unless="$(arg tf_reset)" pkg="camera_localizer" type="image_localizer.exe" name="image_localizer"
-        output="screen" args="_display:=true" required="true">
-    <!-- learningRate The value between 0 and 1 that indicates how fast the
-    background model is learnt. Negative parameter value makes the algorithm to
-    use some automatically chosen learning rate. 0 means that the background
-    model is not updated at all, 1 means that the background model is
-    completely reinitialized from the last frame. -->
-    <param name="learningRate" value="0.001" />
-  </node>
+<!-- camera node -->
+<!-- as of 30/01/2017, usb_cam does not compile and uvc_cam is obsolete. -->
+<!--
+<node pkg="cv_camera" type="cv_camera_node" name="camera_node" output="screen">
+  <param name="device_id" value="1" /> <!- the device to use ->
+  <param name="image_width" value="640" />
+  <param name="image_height" value="480" />
+  <param name="rate" value="30" /> <!- frames per second ->
+</node>
+-->
 
-  <!-- camera2world_converter -->
-  <node unless="$(arg tf_reset)" pkg="camera_localizer" type="camera2world_converter.exe" name="camera2world_converter"
-        output="screen" args="_goalz:=.05" required="true">
-  </node>
+<!-- image2camera_tf -->
+<node pkg="camera_localizer" type="image2camera_tf.exe" name="image2camera_tf" required="true"
+      output="screen" args="_reset:=$(arg tf_reset)">
+  <param name="camera_index" value="$(arg camera_index)"/>
+<!--
+  <param name="img_topic" value="camera_node/image_raw"/>
+-->
+  <param name="calib_filename" value="$(arg calib_filename)"/>
+  <!-- kitchen: tiled floor corners -->
+  <param name="worldxyz" value="0,0,0, 1.36,0,0, 0,1.36,0, 1.36,1.36,0" />
+  <!-- bedroom: bed-wall corner, bed corner, door-wall limit, marker -->
+<!--
+  <param name="worldxyz" value="0,0,0, 1.40,0,0, 0,1.70,0, 1,1,0" />
+-->
+</node>
 
-  <!-- TF: odom -> world -->
-  <node unless="$(arg tf_reset)" pkg="tf" type="static_transform_publisher" name="odom2world_broadcaster" output="screen"
-      args="0 0 0  0 0 0  /world  /odom 100" />
+<!-- image_localizer -->
+<node unless="$(arg tf_reset)" pkg="camera_localizer" type="image_localizer.exe" name="image_localizer"
+      output="screen" args="" required="true">
+  <param name="camera_index" value="$(arg camera_index)"/>
+  <param name="calib_filename" value="$(arg calib_filename)"/>
+  <param name="display" value="$(arg display)"/>
+  <!-- learningRate The value between 0 and 1 that indicates how fast the
+  background model is learnt. Negative parameter value makes the algorithm to
+  use some automatically chosen learning rate. 0 means that the background
+  model is not updated at all, 1 means that the background model is
+  completely reinitialized from the last frame. -->
+  <param name="learningRate" value="0.001" />
+</node>
 
+<!-- camera2world_converter -->
+<node unless="$(arg tf_reset)" pkg="camera_localizer" type="camera2world_converter.exe"
+      name="camera2world_converter" output="screen" required="true">
+  <param name="goalz" value=".05"/>
+</node>
 
-  <!-- rviz -->
-  <node unless="$(arg tf_reset)" pkg="rviz" type="rviz" name="rviz" output="screen"
-      args="-display-config $(find camera_localizer)/config/rviz_image_localizer.rviz" />
+<!-- TF: odom -> world -->
+<node unless="$(arg tf_reset)" pkg="tf" type="static_transform_publisher" name="odom2world_broadcaster" output="screen"
+    args="0 0 0  0 0 0  /world  /odom 100" />
 
-</group>
+<!-- rviz -->
+<node unless="$(arg tf_reset)" pkg="rviz" type="rviz" name="rviz" output="screen"
+    args="-display-config $(find camera_localizer)/config/rviz_image_localizer.rviz" />
+
 </launch>

@@ -79,7 +79,7 @@ void pt_cb(const geometry_msgs::PointStamped & robot_direction0) {
   solve(cam_pos.point, robot_direction.point, goalz, robot_pos.point);
   robot_pos.header.stamp = robot_direction0.header.stamp;
   pospub.publish(robot_pos);
-  ROS_INFO_THROTTLE(1, "Cam center:%s, robot dir:%s -> robot pos:%s",
+  ROS_INFO_THROTTLE(5, "Cam center:%s, robot dir:%s -> robot pos:%s",
                     printP(cam_pos.point).c_str(), printP(robot_direction.point).c_str(),
                     printP(robot_pos.point).c_str());
 } // end pt_cb();

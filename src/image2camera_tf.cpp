@@ -27,10 +27,13 @@ ________________________________________________________________________________
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 // ROS
+#include <cv_bridge/cv_bridge.h>
 #include <ros/node_handle.h>
 #include <ros/package.h>
+#include <sensor_msgs/Image.h>
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
+// our packages
 #include <camera_localizer/yaml2calib.h>
 #include <vision_utils/string_split.h>
 #include <vision_utils/print_point.h>
@@ -43,7 +46,8 @@ void mouse_cb(int event, int x, int y, int /*flags*/, void* /*userdata*/) {
     pixels.push_back(cv::Point2f(x, y));
 }
 
-bool calib_from_cam_and_exit(const std::string & configfile) {
+bool calib_from_cam_and_exit(const std::string & configfile,
+                             cv::Mat3b & rgb) {
   ros::NodeHandle nh_public, nh_private("~");
   double cell_width = 1;
   nh_private.param("cell_width", cell_width, cell_width);
@@ -69,15 +73,13 @@ bool calib_from_cam_and_exit(const std::string & configfile) {
   } // end for i
 
   // acquire the four corners
-  cv::VideoCapture cap(1); // open the default camera
-  assert(cap.isOpened());  // check if we succeeded
   cv::Mat viz;
   std::string winname = "image2camera_tf";
   cv::namedWindow(winname);
   cv::setMouseCallback(winname, mouse_cb);
   while(pixels.size() < world_pos.size()) {
     unsigned int ptidx = pixels.size();
-    cap >> viz; // get a new frame from camera
+    rgb.copyTo(viz);
     // draw previously clicked pts
     for (unsigned int i = 0; i < ptidx; ++i)
       cv::circle(viz, pixels[i], 3, CV_RGB(0, 255, 0), -1);
@@ -93,13 +95,16 @@ bool calib_from_cam_and_exit(const std::string & configfile) {
   }
 
   // compute extrinsics with solvePnP()
-  std::string cal_filename = ros::package::getPath("rossumo") + "/data/camcalib.yaml";
+  std::string calib_filename = ros::package::getPath("camera_localizer") + "/data/camcalib.yaml";
+  nh_private.param("calib_filename", calib_filename, calib_filename);
   sensor_msgs::CameraInfo cam_info;
   image_geometry::PinholeCameraModel cam_model;
   cv::Mat intrinsics, distortion;
-  if (!yaml2calib(cal_filename, cam_info, cam_model, intrinsics, distortion)) {
+  if (!yaml2calib(calib_filename, cam_info, cam_model, intrinsics, distortion)) {
     return -1;
   }
+  ROS_INFO_STREAM("Read from '" << calib_filename << "' distortion.t()="
+                  << distortion.t() << ", intrinsics=" << std::endl << intrinsics);
 
   // solvePnP works with undistorted coordinates
   // source: http://stackoverflow.com/questions/34550499/undistort-image-before-estimating-pose-using-solvepnp
@@ -108,27 +113,32 @@ bool calib_from_cam_and_exit(const std::string & configfile) {
     ROS_FATAL("cv::solvePnP() failed!");
     return false;
   }
-  std::cout << "rvec:" << rvec.t() << std::endl;
-  std::cout << "tvec:" << tvec.t() << std::endl;
+  std::cout << "rvec:" << rvec.t() << ", type:" << rvec.type() << std::endl;
+  std::cout << "tvec:" << tvec.t() << ", type:" << tvec.type() << std::endl;
+  // type 5 = CV_32F
+  assert(rvec.type() = CV_32F);
+  assert(tvec.type() = CV_32F);
 
   // convert to rotation matrix
   cv::Mat rmat;
   cv::Rodrigues(rvec, rmat);
+  assert(rmat.type() = CV_32F);
   //std::cout << "rmat:" << rmat << std::endl;
-  tf::Matrix3x3 mat(rmat.at<double>(0), rmat.at<double>(1), rmat.at<double>(2),
-                    rmat.at<double>(3), rmat.at<double>(4), rmat.at<double>(5),
-                    rmat.at<double>(6), rmat.at<double>(7), rmat.at<double>(8));
+  tf::Matrix3x3 mat(rmat.at<float>(0), rmat.at<float>(1), rmat.at<float>(2),
+                    rmat.at<float>(3), rmat.at<float>(4), rmat.at<float>(5),
+                    rmat.at<float>(6), rmat.at<float>(7), rmat.at<float>(8));
   // convert to quaternion
   tf::Quaternion q;
   mat.getRotation(q);
+  q.normalize();
 
   // covnert to transform
   // http://stackoverflow.com/questions/36561593/opencv-rotation-rodrigues-and-translation-vectors-for-positioning-3d-object-in
   transform.header.frame_id = "/camera_frame";
   transform.child_frame_id = "/world";
-  transform.transform.translation.x = tvec.at<double>(0);
-  transform.transform.translation.y = tvec.at<double>(1);
-  transform.transform.translation.z = tvec.at<double>(2);
+  transform.transform.translation.x = tvec.at<float>(0);
+  transform.transform.translation.y = tvec.at<float>(1);
+  transform.transform.translation.z = tvec.at<float>(2);
   tf::quaternionTFToMsg(q, transform.transform.rotation);
 
   // save to file
@@ -151,7 +161,7 @@ bool calib_from_cam_and_exit(const std::string & configfile) {
   myfile.close();
 
   // draw an illustration image
-  cap >> viz; // new frame
+  rgb.copyTo(viz); // new frame
   // draw a regular grid
   world_pos.clear();
   for (double x = 0; x < cell_width; x+=.1)
@@ -164,12 +174,13 @@ bool calib_from_cam_and_exit(const std::string & configfile) {
   // draw a caption
   std::ostringstream caption;
   caption << "Computed pos: (" << std::setprecision(3)
-          << tvec.at<double>(0) << "," << tvec.at<double>(1) << "," << tvec.at<double>(2)
+          << tvec.at<float>(0) << "," << tvec.at<float>(1) << "," << tvec.at<float>(2)
           << "). Press a key to continue";
   cv::putText(viz, caption.str(), cv::Point(20, 20), CV_FONT_HERSHEY_PLAIN,
               1, CV_RGB(0, 255, 0));
+  ROS_INFO("%s", caption.str().c_str());
   // show
-  cv::imshow("viz", viz);
+  cv::imshow(winname, viz);
   cv::waitKey(0);
   cv::destroyAllWindows();
   return true;
@@ -209,12 +220,43 @@ bool load_from_file(const std::string & configfile) {
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "image2camera_tf");
-  std::string configfile = ros::package::getPath("rossumo") + "/config/camera2world_param.txt";
-  ros::NodeHandle nh_private("~");
+  std::string configfile = ros::package::getPath("camera_localizer") + "/config/camera2world_param.txt";
+  ros::NodeHandle nh_public, nh_private("~");
   bool reset = true;
   nh_private.param("reset", reset, reset);
-  if (reset) // calib from cam and save
-    return (calib_from_cam_and_exit(configfile) ? 0 : -1);
+  if (reset) { // calib from cam and save
+    cv::Mat3b rgb;
+    std::string img_topic = "";
+    int camera_index = -1;
+    nh_private.param("img_topic", img_topic, img_topic);
+    nh_private.param("camera_index", camera_index, camera_index);
+    if (img_topic.size()) {
+      ROS_INFO("Waiting for image on topic '%s'...", img_topic.c_str());
+      sensor_msgs::ImageConstPtr rgb_msg = ros::topic::waitForMessage<sensor_msgs::Image>
+          (img_topic, nh_public, ros::Duration(1));
+      if (!rgb_msg) {
+        ROS_FATAL("could not obtain an image on '%s'!\n",
+                  img_topic.c_str());
+        return -1;
+      }
+      cv_bridge::CvImageConstPtr rgb_bridge = cv_bridge::toCvShare(rgb_msg);
+      rgb_bridge->image.copyTo(rgb);
+    } else if (camera_index >= 0){ // try to open CV camera
+      cv::VideoCapture cap(camera_index); // open the default camera
+      assert(cap.isOpened());  // check if we succeeded
+      cap >> rgb; // get a new frame from camera
+    }
+    else { // fail
+      ROS_FATAL("You need to specify either 'img_topic' or 'camera_index' parameters");
+      return -1;
+    }
+
+    if (rgb.empty()) {
+      ROS_FATAL("Empty image, corrupted?");
+      return -1;
+    }
+    return (calib_from_cam_and_exit(configfile, rgb) ? 0 : -1);
+  }
   if (!load_from_file(configfile))
     return -1;
   tf::TransformBroadcaster br;

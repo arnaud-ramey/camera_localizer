@@ -4,6 +4,23 @@
 
 <!-- stage -->
 <node pkg="stage_ros" type="stageros" name="stageros" required="true"
-      args="$(find rosmariokart)/config/empty.world"/>
+      args="$(find camera_localizer)/config/empty.world"/>
+
+<node pkg="image_view" type="image_view" name="image_view" required="true"
+      args="image:=/robot_1/image"/>
+
+<!-- image2camera_tf -->
+<node pkg="camera_localizer" type="image2camera_tf.exe" name="image2camera_tf" required="true"
+      output="screen" args="_reset:=true"/>
+
+  <node pkg="camera_localizer" type="image_localizer.exe" name="image_localizer"
+        output="screen" args="_display:=true" required="true">
+    <!-- learningRate The value between 0 and 1 that indicates how fast the
+    background model is learnt. Negative parameter value makes the algorithm to
+    use some automatically chosen learning rate. 0 means that the background
+    model is not updated at all, 1 means that the background model is
+    completely reinitialized from the last frame. -->
+    <param name="learningRate" value="0.001" />
+  </node>
 
 </launch>
